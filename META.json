@@ -25,16 +25,21 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "Test::More" : "0.94"
+            "ExtUtils::MakeMaker" : "0",
+            "Test::FailWarnings" : "0",
+            "Test::More" : "0.94",
+            "Test::Most" : "0.22"
          }
       },
       "configure" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : "6.3002"
+            "ExtUtils::MakeMaker" : "6.64"
          }
       },
       "runtime" : {
-         "requires" : {}
+         "requires" : {
+            "Moose" : "0"
+         }
       }
    },
    "release_status" : "stable",
@@ -50,5 +55,5 @@
          "url" : "git://github.com/trinitum/perl-Data-EventStream"
       }
    },
-   "version" : "0.01"
+   "version" : "0.02"
 }
