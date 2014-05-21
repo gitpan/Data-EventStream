@@ -102,10 +102,10 @@ my $es = Data::EventStream->new(
 );
 
 my %params = (
-    t3 => { type => 'time', period => '3', },
-    t5 => { type => 'time', period => '5', },
-    b4 => { type => 'time', period => '4', batch => 1, },
-    b3 => { type => 'time', period => '3.5', batch => 1, start_time => 9.5, },
+    t3 => { duration => '3', },
+    t5 => { duration => '5', },
+    b4 => { duration => '4', batch => 1, },
+    b3 => { duration => '3.5', batch => 1, start_time => 9.5, },
 );
 
 my %average;
@@ -144,6 +144,8 @@ for my $as ( keys %params ) {
         },
     );
 }
+
+is $es->time_length, 5, "correct time_length for feed stream";
 
 my @events = (
     {
@@ -254,7 +256,7 @@ my @events = (
 my $i = 1;
 for my $ev (@events) {
     subtest "event $i: time=$ev->{time}" . ( $ev->{val} ? " val=$ev->{val}" : "" ) => sub {
-        $es->set_time( $ev->{time} );
+        $es->set_time( $ev->{time} ) unless $ev->{val};
         $es->add_event( { time => $ev->{time}, val => $ev->{val} } ) if $ev->{val};
         eq_or_diff \%ins, $ev->{ins} // {}, "got expected ins";
         %ins = ();
