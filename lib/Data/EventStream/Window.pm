@@ -1,7 +1,7 @@
 package Data::EventStream::Window;
 use 5.010;
 use Moose;
-our $VERSION = "0.05";
+our $VERSION = "0.06";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -10,7 +10,7 @@ Data::EventStream::Window - Perl extension for event processing
 
 =head1 VERSION
 
-This document describes Data::EventStream::Window version 0.05
+This document describes Data::EventStream::Window version 0.06
 
 =head1 DESCRIPTION
 
@@ -94,6 +94,30 @@ sub get_event {
     }
 }
 
+=head2 $self->get_iterator
+
+Returns callable iterator object. Each time you call it, it returns the next
+event starting from the latest one. For example:
+
+    my $next_event = $win->get_iterator;
+    while ( my $event = $next_event->() ) {
+        ...
+    }
+
+=cut
+
+sub get_iterator {
+    my $self   = shift;
+    my $idx    = 0;
+    my $events = $self->events;
+    my $shift  = $self->shift;
+    my $count  = $self->count;
+    return sub {
+        return if $idx++ >= $count;
+        return $events->[ -( $shift + $idx ) ];
+    };
+}
+
 sub shift_event {
     my ($self) = @_;
     $self->dec_count;
@@ -105,5 +129,9 @@ sub push_event {
     $self->inc_count;
     return $self->events->[ -( $self->shift + 1 ) ];
 }
+
+no Moose;
+
+__PACKAGE__->meta->make_immutable;
 
 1;

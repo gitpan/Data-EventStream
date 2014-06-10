@@ -3,66 +3,9 @@ use Test::FailWarnings;
 
 use Data::EventStream;
 
-{
-
-    package Averager;
-    use Moose;
-
-    has value_sub => (
-        is      => 'rw',
-        default => sub {
-            sub { shift->{val} }
-        },
-    );
-
-    has _sum => (
-        is      => 'rw',
-        traits  => ['Number'],
-        default => 0,
-        handles => {
-            _sum_add => 'add',
-            _sum_sub => 'sub',
-        },
-    );
-
-    has _count => (
-        is      => 'rw',
-        traits  => ['Counter'],
-        default => 0,
-        handles => {
-            _inc_count   => 'inc',
-            _dec_count   => 'dec',
-            _reset_count => 'reset',
-        },
-    );
-
-    sub value {
-        my $self = shift;
-        return $self->_count ? $self->_sum / $self->_count : 'NaN';
-    }
-
-    sub enter {
-        my ( $self, $event ) = @_;
-        my $val = $self->value_sub->($event);
-        $self->_sum_add($val);
-        $self->_inc_count;
-    }
-
-    sub reset {
-        my $self = shift;
-        $self->_sum(0);
-        $self->_reset_count;
-    }
-
-    sub leave {
-        my ( $self, $event ) = @_;
-        my $val = $self->value_sub->($event);
-        $self->_dec_count;
-        $self->_sum_sub($val);
-    }
-}
-
-my $es = Data::EventStream->new();
+use lib 't/lib';
+use Averager;
+use TestStream;
 
 my %params = (
     'c3' => { count => 3 },
@@ -71,21 +14,6 @@ my %params = (
     'd4' => { count => 4, batch => 1, shift => 2 },
     'd3' => { count => 3, shift => 2 },
 );
-
-my %average;
-my %ins;
-my %outs;
-my %resets;
-
-for my $as ( keys %params ) {
-    $average{$as} = Averager->new;
-    $es->add_aggregator(
-        $average{$as}, %{ $params{$as} },
-        on_enter => sub { $ins{$as}    = $_[0]->value; },
-        on_leave => sub { $outs{$as}   = $_[0]->value; },
-        on_reset => sub { $resets{$as} = $_[0]->value; },
-    );
-}
 
 my @events = (
     {
@@ -141,20 +69,11 @@ my @events = (
     },
 );
 
-my %exp_resets = ( b4 => [ 3.5, 4.75, ], );
-
-my $i = 1;
-for my $ev (@events) {
-    subtest "event $i: val=$ev->{val}" => sub {
-        $es->add_event( { val => $ev->{val} } );
-        eq_or_diff \%ins, $ev->{ins} // {}, "got expected ins";
-        %ins = ();
-        eq_or_diff \%outs, $ev->{outs} // {}, "got expected outs";
-        %outs = ();
-        eq_or_diff \%resets, $ev->{resets} // {}, "got expected resets";
-        %resets = ();
-    };
-    $i++;
-}
+TestStream->new(
+    aggregator_class  => 'Averager',
+    aggregator_params => \%params,
+    events            => \@events,
+    expected_length   => 6,
+)->run;
 
 done_testing;

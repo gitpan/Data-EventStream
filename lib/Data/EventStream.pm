@@ -1,7 +1,7 @@
 package Data::EventStream;
 use 5.010;
 use Moose;
-our $VERSION = "0.05";
+our $VERSION = "0.06";
 $VERSION = eval $VERSION;
 use Carp;
 use Data::EventStream::Window;
@@ -12,7 +12,7 @@ Data::EventStream - Perl extension for event processing
 
 =head1 VERSION
 
-This document describes Data::EventStream version 0.05
+This document describes Data::EventStream version 0.06
 
 =head1 SYNOPSIS
 
@@ -76,6 +76,8 @@ has time_length => ( is => 'ro', default => 0, writer => '_set_time_length' );
 
 has length => ( is => 'ro', default => 0, writer => '_set_length' );
 
+has _next_leave => ( is => 'rw', );
+
 =head2 $self->set_time($time)
 
 Set new model time. This time must not be less than the current model time.
@@ -89,21 +91,25 @@ sub set_time {
     my $gt = $self->time_sub;
     croak "time_sub must be defined if you using time aggregators" unless $gt;
 
+    my $next_leave = $time + $self->time_length;
     for my $aggregator ( @{ $self->aggregators } ) {
+        my $win = $aggregator->{_window};
+        my $obj = $aggregator->{_obj};
         if ( $aggregator->{duration} ) {
-            my $win = $aggregator->{_window};
             next if $win->start_time > $time;
             my $period = $aggregator->{duration};
-            my $obj    = $aggregator->{_obj};
             if ( $aggregator->{batch} ) {
                 while ( $time - $win->start_time >= $period ) {
                     $win->end_time( $win->start_time + $period );
                     $obj->window_update($win);
                     $aggregator->{on_reset}->($obj) if $aggregator->{on_reset};
                     $win->start_time( $win->end_time );
+                    $win->reset_count;
                     $obj->reset($win);
                 }
                 $win->end_time($time);
+                my $nl = $win->start_time + $period;
+                $next_leave = $nl if $nl < $next_leave;
             }
             else {
                 $win->end_time($time);
@@ -118,10 +124,19 @@ sub set_time {
                     }
                     $win->start_time($st);
                 }
+                if ( $win->count ) {
+                    my $nl = $gt->( $win->get_event(-1) ) + $period;
+                    $next_leave = $nl if $nl < $next_leave;
+                }
             }
             $obj->window_update($win);
         }
+        else {
+            $win->end_time($time);
+            $obj->window_update($win);
+        }
     }
+    $self->_next_leave($next_leave);
 
     my $limit = $self->time - $self->time_length;
     while ( $self->count_events > $self->length
@@ -129,6 +144,16 @@ sub set_time {
     {
         $self->shift_event;
     }
+}
+
+=head2 $self->next_leave
+
+Return time of the next nearest leave or reset event
+
+=cut
+
+sub next_leave {
+    shift->_next_leave;
 }
 
 =head2 $self->add_aggregator($aggregator, %params)
@@ -235,13 +260,20 @@ sub add_event {
             my $win = $aggregator->{_window};
             if ( $win->count == $aggregator->{count} ) {
 
-                # TODO: review this condition
                 if ($gt) {
                     $win->start_time( $gt->( $win->get_event(-1) ) );
                     $aggregator->{_obj}->window_update($win);
                 }
                 $aggregator->{on_leave}->( $aggregator->{_obj} ) if $aggregator->{on_leave};
                 my $ev_out = $win->shift_event;
+                if ($gt) {
+                    if ( $win->count ) {
+                        $win->start_time( $gt->( $win->get_event(-1) ) );
+                    }
+                    else {
+                        $win->start_time($time);
+                    }
+                }
                 $aggregator->{_obj}->leave( $ev_out, $win );
             }
         }
@@ -249,13 +281,18 @@ sub add_event {
 
     $self->push_event($event);
 
+    my $next_leave = $self->_next_leave;
     for my $aggregator (@$as) {
         my $win = $aggregator->{_window};
         if ( $aggregator->{count} ) {
             next if $ev_num < $aggregator->{shift};
             my $ev_in = $win->push_event;
-            my $event_time = $gt ? $gt->($ev_in) : undef;
-            $win->end_time($event_time);
+            my $event_time;
+            if ($gt) {
+                $event_time = $gt->($ev_in);
+                $win->end_time($event_time);
+                $win->start_time($event_time) if $win->count == 1
+            }
             $aggregator->{_obj}->enter( $ev_in, $win );
             $aggregator->{on_enter}->( $aggregator->{_obj} ) if $aggregator->{on_enter};
             if ( $aggregator->{batch} and $win->count == $aggregator->{count} ) {
@@ -271,7 +308,12 @@ sub add_event {
             $aggregator->{_obj}->enter( $ev_in, $win );
             $aggregator->{on_enter}->( $aggregator->{_obj} ) if $aggregator->{on_enter};
         }
+        if ( $aggregator->{duration} and $win->count ) {
+            my $nl = $gt->( $win->get_event(-1) ) + $aggregator->{duration};
+            $next_leave = $nl if $nl < $next_leave;
+        }
     }
+    $self->_next_leave($next_leave);
 
     my $time_limit = $self->time - $self->time_length;
     while ( $self->count_events > $self->length ) {
@@ -288,6 +330,10 @@ sub add_event {
         }
     }
 }
+
+no Moose;
+
+__PACKAGE__->meta->make_immutable;
 
 1;
 
