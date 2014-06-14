@@ -1,7 +1,7 @@
 package Data::EventStream;
 use 5.010;
 use Moose;
-our $VERSION = "0.07";
+our $VERSION = "0.08";
 $VERSION = eval $VERSION;
 use Carp;
 use Data::EventStream::Window;
@@ -12,7 +12,7 @@ Data::EventStream - Perl extension for event processing
 
 =head1 VERSION
 
-This document describes Data::EventStream version 0.07
+This document describes Data::EventStream version 0.08
 
 =head1 SYNOPSIS
 
@@ -91,10 +91,15 @@ sub set_time {
     my $gt = $self->time_sub;
     croak "time_sub must be defined if you using time aggregators" unless $gt;
 
+    my $as         = $self->aggregators;
     my $next_leave = $time + $self->time_length;
-    for my $aggregator ( @{ $self->aggregators } ) {
-        my $win = $aggregator->{_window};
-        my $obj = $aggregator->{_obj};
+    my @deleted;
+
+  AGGREGATOR:
+    for my $n ( 0 .. $#$as ) {
+        my $aggregator = $as->[$n];
+        my $win        = $aggregator->{_window};
+        my $obj        = $aggregator->{_obj};
         if ( $aggregator->{duration} ) {
             next if $win->start_time > $time;
             my $period = $aggregator->{duration};
@@ -106,6 +111,10 @@ sub set_time {
                     $win->start_time( $win->end_time );
                     $win->reset_count;
                     $obj->reset($win);
+                    if ( $aggregator->{disposable} ) {
+                        push @deleted, $n;
+                        next AGGREGATOR;
+                    }
                 }
                 $win->end_time($time);
                 my $nl = $win->start_time + $period;
@@ -135,6 +144,9 @@ sub set_time {
             $win->end_time($time);
             $obj->window_update($win);
         }
+    }
+    while ( my $n = pop @deleted ) {
+        splice @$as, $n, 1;
     }
     $self->_next_leave($next_leave);
 
@@ -183,11 +195,10 @@ and all events leaving it at once.
 Time when the first period should start. Used in conjunction with I<duration>
 and I<batch>. By default current model time.
 
-=item B<shift>
+=item B<disposable>
 
-Aggregate data with delay. Event enters aggregator only after specified by
-I<shift> number of events were added to the stream. Not compatible with
-I<duration>. By default 0.
+Used in conjunction with I<batch>. Aggregator only aggregates specified period
+once and on reset it is removed from the list of aggregators.
 
 =item B<on_enter>
 
@@ -210,11 +221,9 @@ Aggregator object is passed as the only argument to callback.
 
 sub add_aggregator {
     my ( $self, $aggregator, %params ) = @_;
-    $params{_obj} = $aggregator;
-    $params{shift} //= 0;
+    $params{_obj}    = $aggregator;
     $params{_window} = Data::EventStream::Window->new(
         events     => $self->events,
-        shift      => $params{shift},
         start_time => $params{start_time} // $self->time,
     );
 
@@ -222,14 +231,13 @@ sub add_aggregator {
         croak 'At least one of "count" or "duration" parameters must be provided';
     }
     if ( $params{count} ) {
-        if ( $params{shift} + $params{count} > $self->length ) {
-            $self->_set_length( $params{shift} + $params{count} );
+        if ( $params{count} > $self->length ) {
+            $self->_set_length( $params{count} );
         }
     }
     if ( $params{duration} ) {
         croak "time_sub must be defined for using time aggregators"
           unless $self->time_sub;
-        croak '"shift" parameter is not compatible with "duration"' if $params{shift};
         if ( $params{duration} > $self->time_length ) {
             $self->_set_time_length( $params{duration} );
         }
@@ -282,10 +290,13 @@ sub add_event {
     $self->push_event($event);
 
     my $next_leave = $self->_next_leave;
-    for my $aggregator (@$as) {
-        my $win = $aggregator->{_window};
+    my @deleted;
+
+  AGGREGATOR:
+    for my $n ( 0 .. $#$as ) {
+        my $aggregator = $as->[$n];
+        my $win        = $aggregator->{_window};
         if ( $aggregator->{count} ) {
-            next if $ev_num < $aggregator->{shift};
             my $ev_in = $win->push_event;
             my $event_time;
             if ($gt) {
@@ -301,6 +312,10 @@ sub add_event {
                 $win->reset_count;
                 $win->start_time($event_time) if $event_time;
                 $aggregator->{_obj}->reset($win);
+                if ( $aggregator->{disposable} ) {
+                    push @deleted, $n;
+                    next AGGREGATOR;
+                }
             }
         }
         else {
@@ -312,6 +327,9 @@ sub add_event {
             my $nl = $gt->( $win->get_event(-1) ) + $aggregator->{duration};
             $next_leave = $nl if $nl < $next_leave;
         }
+    }
+    while ( my $n = pop @deleted ) {
+        splice @$as, $n, 1;
     }
     $self->_next_leave($next_leave);
 

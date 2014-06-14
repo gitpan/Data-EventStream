@@ -1,7 +1,7 @@
 package Data::EventStream::Window;
 use 5.010;
 use Moose;
-our $VERSION = "0.07";
+our $VERSION = "0.08";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -10,7 +10,7 @@ Data::EventStream::Window - Perl extension for event processing
 
 =head1 VERSION
 
-This document describes Data::EventStream::Window version 0.07
+This document describes Data::EventStream::Window version 0.08
 
 =head1 DESCRIPTION
 
@@ -20,14 +20,6 @@ Normally window objects are passed to aggregators' callbacks and user has no nee
 =head1 METHODS
 
 =cut
-
-=head2 $self->shift
-
-Shift parameter for count aggregators, by default 0.
-
-=cut
-
-has shift => ( is => 'ro', default => 0, );
 
 =head2 $self->count
 
@@ -87,10 +79,10 @@ sub get_event {
     my $count = $self->count;
     return if $idx >= $count or $idx < -$count;
     if ( $idx >= 0 ) {
-        return $self->events->[ -( $self->shift + $idx + 1 ) ];
+        return $self->events->[ -( $idx + 1 ) ];
     }
     else {
-        return $self->events->[ -( $self->shift + $count + $idx + 1 ) ];
+        return $self->events->[ -( $count + $idx + 1 ) ];
     }
 }
 
@@ -110,24 +102,23 @@ sub get_iterator {
     my $self   = shift;
     my $idx    = 0;
     my $events = $self->events;
-    my $shift  = $self->shift;
     my $count  = $self->count;
     return sub {
         return if $idx++ >= $count;
-        return $events->[ -( $shift + $idx ) ];
+        return $events->[ -($idx) ];
     };
 }
 
 sub shift_event {
     my ($self) = @_;
     $self->dec_count;
-    return $self->events->[ -( $self->shift + $self->count + 1 ) ];
+    return $self->events->[ -( $self->count + 1 ) ];
 }
 
 sub push_event {
     my ($self) = @_;
     $self->inc_count;
-    return $self->events->[ -( $self->shift + 1 ) ];
+    return $self->events->[ -(1) ];
 }
 
 no Moose;
