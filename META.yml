@@ -26,7 +26,7 @@ requires:
   Moose: '0'
 resources:
   bugtracker: https://github.com/trinitum/perl-Data-EventStream/issues
-  homepage: https://github.com/trinitum/perl-Data-EventStream
+  homepage: https://trinitum.github.io/perl-Data-EventStream/
   license: http://dev.perl.org/licenses/
   repository: git://github.com/trinitum/perl-Data-EventStream
-version: '0.09'
+version: '0.10'
