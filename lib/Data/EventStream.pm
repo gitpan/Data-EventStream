@@ -1,7 +1,7 @@
 package Data::EventStream;
 use 5.010;
 use Moose;
-our $VERSION = "0.10";
+our $VERSION = "0.11";
 $VERSION = eval $VERSION;
 use Carp;
 use Data::EventStream::Window;
@@ -12,15 +12,24 @@ Data::EventStream - Perl extension for event processing
 
 =head1 VERSION
 
-This document describes Data::EventStream version 0.10
+This document describes Data::EventStream version 0.11
 
 =head1 SYNOPSIS
 
     use Data::EventStream;
+    $es = Data::EventStream->new;
+    $es->add_aggregator( $agg, %params );
+    while ( my $event = get_event() ) {
+        $es->add_event($event);
+    }
 
 =head1 DESCRIPTION
 
 Module provides methods to analyze stream of events.
+
+Please check L<Project
+Homepage|http://trinitum.github.io/perl-Data-EventStream/> for more information
+about using this module and examples.
 
 =head1 METHODS
 
@@ -157,7 +166,9 @@ sub next_leave {
 
 =head2 $self->add_aggregator($aggregator, %params)
 
-Add a new aggregator object. The following options are accepted:
+Add a new aggregator object. An aggregator that is passed as the first argument
+should implement interface described in L<Data::EventStream::Aggregator>
+documentation. Parameters that go next can be the following::
 
 =over 4
 
@@ -343,6 +354,10 @@ __PACKAGE__->meta->make_immutable;
 1;
 
 __END__
+
+=head1 SEE ALSO
+
+Project homepage at L<http://trinitum.github.io/perl-Data-EventStream/>
 
 =head1 BUGS
 
