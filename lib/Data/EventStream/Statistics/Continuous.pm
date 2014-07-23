@@ -1,6 +1,6 @@
 package Data::EventStream::Statistics::Continuous;
 use Moose;
-our $VERSION = "0.11";
+our $VERSION = "0.12";
 $VERSION = eval $VERSION;
 
 =head1 NAME
@@ -9,7 +9,7 @@ Data::EventStream::Statistics::Continuous - calculate basic parameters of proces
 
 =head1 VERSION
 
-This document describes Data::EventStream::Statistics::Continuous version 0.11
+This document describes Data::EventStream::Statistics::Continuous version 0.12
 
 =head1 SYNOPSIS
 
@@ -110,15 +110,8 @@ sub enter {
     my ( $self, $event, $window ) = @_;
     my $time = $self->{time_sub}->($event);
     my $val  = $self->{value_sub}->($event);
-    if ( $self->{_start_pos} ) {
-        my $cur_pos = $self->{_cur_pos};
-        $self->{_integral} += ( $time - $cur_pos->[0] ) * $cur_pos->[1];
-        $self->{_cur_pos} = [ $time, $val ];
-    }
-    else {
-        $self->{_start_pos} = [ $time, $val ];
-        $self->{_cur_pos}   = [ $time, $val ];
-    }
+    $self->{_start_pos} //= [ $time, $val ];
+    $self->{_cur_pos} = [ $time, $val ];
     $self->{_count}++;
 }
 
@@ -128,15 +121,13 @@ sub enter {
 
 sub leave {
     my ( $self, $event, $window ) = @_;
-    my $time  = $self->{time_sub}->($event);
-    my $val   = $self->{value_sub}->($event);
-    my $start = $self->{_start_pos};
-    $self->{_integral} -= ( $window->start_time - $time ) * $val;
     my $start_ev = $window->get_event(0);
-    if ( $start_ev and $self->{time_sub}->($start_ev) == $window->{start_time} ) {
-        $val = $self->{value_sub}->($start_ev);
+    if ( defined $start_ev and $self->{time_sub}->($start_ev) == $window->{start_time} ) {
+        $self->{_start_pos}[1] = $self->{value_sub}->($start_ev);
     }
-    $self->{_start_pos} = [ $window->start_time, $val ];
+    else {
+        $self->{_start_pos}[1] = $self->{value_sub}->($event);
+    }
     $self->{_count}--;
 }
 
