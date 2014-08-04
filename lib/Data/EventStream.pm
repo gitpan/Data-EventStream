@@ -1,7 +1,7 @@
 package Data::EventStream;
 use 5.010;
 use Moose;
-our $VERSION = "0.12";
+our $VERSION = "0.13";
 $VERSION = eval $VERSION;
 use Carp;
 use Data::EventStream::Window;
@@ -12,7 +12,7 @@ Data::EventStream - Perl extension for event processing
 
 =head1 VERSION
 
-This document describes Data::EventStream version 0.12
+This document describes Data::EventStream version 0.13
 
 =head1 SYNOPSIS
 
@@ -45,8 +45,15 @@ Initial model time, by default 0
 
 =item B<time_sub>
 
-Reference to a subroutine that returns time associated with the event passed
-to it as the only parameter.
+Reference to a subroutine that returns time associated with the event passed to
+it as the only parameter. This argument is not required if you are only going
+to use count based sliding windows.
+
+=item B<filter>
+
+Reference to a subroutine that is invoked every time new event is being added.
+The new event is passed as the only argument to this subroutine. If subroutine
+returns false event is ignored.
 
 =back
 
@@ -64,6 +71,23 @@ has events => (
 has aggregators => (
     is      => 'ro',
     default => sub { [] },
+);
+
+=head2 $self->set_filter(\&sub)
+
+Set a new filter
+
+=head2 $self->remove_filter
+
+Remove filter
+
+=cut
+
+has filter => (
+    is      => 'ro',
+    isa     => 'CodeRef',
+    writer  => 'set_filter',
+    clearer => 'remove_filter',
 );
 
 has time_length => ( is => 'ro', default => 0, );
@@ -252,6 +276,9 @@ Add new event
 
 sub add_event {
     my ( $self, $event ) = @_;
+    if ( $self->{filter} ) {
+        return unless $self->{filter}->($event);
+    }
     my $ev     = $self->{events};
     my $ev_num = @$ev;
     my $as     = $self->aggregators;

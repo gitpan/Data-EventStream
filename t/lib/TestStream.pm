@@ -21,6 +21,8 @@ has expected_length => ( is => 'ro' );
 
 has no_callbacks => ( is => 'ro', default => 0, );
 
+has filter => ( is => 'ro', );
+
 sub _store_observed_value {
     my ( $hr, $key, $value ) = @_;
     if ( defined $hr->{$key} ) {
@@ -42,6 +44,7 @@ sub run {
     my $es = Data::EventStream->new(
         ( defined $test->start_time ? ( time     => $test->start_time ) : () ),
         ( defined $test->time_sub   ? ( time_sub => $test->time_sub )   : () ),
+        ( defined $test->filter     ? ( filter   => $test->filter )     : () ),
     );
 
     my %aggregator;

@@ -10,7 +10,7 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: '6.64'
 dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.141170'
+generated_by: 'ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.142060'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -29,4 +29,4 @@ resources:
   homepage: https://trinitum.github.io/perl-Data-EventStream/
   license: http://dev.perl.org/licenses/
   repository: git://github.com/trinitum/perl-Data-EventStream
-version: '0.12'
+version: '0.13'
